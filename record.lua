@@ -1,258 +1,571 @@
-local RunService = game:GetService("RunService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Workspace = game:GetService("Workspace")
+local Player = game.Players.LocalPlayer
+local PlayerGui = Player:WaitForChild("PlayerGui")
+local TweenService = game:GetService("TweenService")
 
-local ReplayCache = {}
-local RegisteredObjects = {}
-local ActiveRecording = {}
+-- ScreenGui
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Parent = PlayerGui
+ScreenGui.Enabled = true
+ScreenGui.ResetOnSpawn = false
 
-local isRecording = false
-local isReplaying = false
 
-local timePassed = 0
-local activeRecordingName = ""
-local recordConnection = nil
+-- Main Frame
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0,260,0,320)
+MainFrame.Position = UDim2.new(0.5,-130,0.5,-160)
+MainFrame.BackgroundColor3 = Color3.fromRGB(50,0,80)
+MainFrame.BackgroundTransparency = 0.1
+MainFrame.Active = true
+MainFrame.Draggable = true
+MainFrame.ClipsDescendants = true
+MainFrame.Parent = ScreenGui
 
-local Step = Instance.new("BindableEvent")
-local FrameStep = Instance.new("BindableEvent")
-local OnRecord = Instance.new("BindableEvent")
-local OnStop = Instance.new("BindableEvent")
-local OnReplay = Instance.new("BindableEvent")
-local OnReplayStop = Instance.new("BindableEvent")
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0,20)
+mainCorner.Parent = MainFrame
 
-local Module = {}
+-- Border
+local mainStroke = Instance.new("UIStroke")
+mainStroke.Color = Color3.fromRGB(255,255,255)
+mainStroke.Thickness = 2
+mainStroke.Parent = MainFrame
 
-local function createPhantom(object)
-    local phantom
-    
-    if (object.ClassName == "Part") then
-        phantom = object:Clone()
-        phantom.Material = Enum.Material.Neon
-        phantom.Transparency = 0.75
-        phantom.CanCollide = false
-        phantom.Anchored = true
-        
-    elseif (object.ClassName == "Model") then
-        local dummyTemplate = ReplicatedStorage:FindFirstChild("Dummy")
-        if not dummyTemplate then
-            phantom = object:Clone()
-            for _, child in ipairs(phantom:GetDescendants()) do
-                if (child:IsA("BasePart")) then
-                    child.Transparency = 0.75
-                    child.CanCollide = false
-                    child.Anchored = true
-                end
-            end
-        else
-            phantom = dummyTemplate:Clone()
-        end
-        
-        phantom.Name = object.Name
-        
-        if dummyTemplate then
-            for _, child in ipairs(phantom:GetChildren()) do
-                if (child:IsA("BasePart")) then
-                    child.Transparency = 0.75
-                    child.CanCollide = false
-                    child.Anchored = true
-                end
-            end
-        end
-    end
-    
-    if phantom then
-        phantom.Name = object.Name
-        phantom.Parent = ReplicatedStorage
-    end
-    
-    return phantom
-end
+-- Gradient Background
+local uiGradient = Instance.new("UIGradient")
+uiGradient.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(90,0,180)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(30,0,60))
+}
+uiGradient.Rotation = 90
+uiGradient.Parent = MainFrame
 
-Module.Register = function(object)
-    assert(object ~= nil, "Please provide an object to register")
-    
-    if not table.find(RegisteredObjects, object) then
-        table.insert(RegisteredObjects, object)
-        
-        if not ReplicatedStorage:FindFirstChild(object.Name) then
-            createPhantom(object)
-        end
-    end
-end
+-- Navbar
+local Navbar = Instance.new("Frame")
+Navbar.Size = UDim2.new(1,0,0,50)
+Navbar.BackgroundColor3 = Color3.fromRGB(60,0,140)
+Navbar.Parent = MainFrame
 
-Module.Unregister = function(object)
-    assert(object ~= nil, "Please provide an object to unregister")
-    
-    local index = table.find(RegisteredObjects, object)
-    if index then
-        table.remove(RegisteredObjects, index)
-        
-        local phantom = ReplicatedStorage:FindFirstChild(object.Name)
-        if phantom then
-            phantom:Destroy()
-        end
-    end
-end
+local navCorner = Instance.new("UICorner")
+navCorner.CornerRadius = UDim.new(0,20)
+navCorner.Parent = Navbar
 
-Module.Record = function(name)
-    if isRecording then
-        return
-    end
-    
-    assert(name ~= nil and typeof(name) == "string" and #name > 0, "Please provide a name for the replay")
-    
-    activeRecordingName = name
-    isRecording = true
-    timePassed = 0
-    ActiveRecording = {}
-    
-    for _, object in ipairs(RegisteredObjects) do
-        ActiveRecording[object] = {}
-    end
-    
-    OnRecord:Fire(name)
-    
-    recordConnection = RunService.Heartbeat:Connect(function(deltaTime)
-        timePassed += deltaTime
-        
-        for object, framesArray in pairs(ActiveRecording) do
-            local cframe
-            if (object.ClassName == "Model") then
-                if object.PrimaryPart then
-                    cframe = object.PrimaryPart.CFrame
-                else
-                    cframe = CFrame.new()
-                end
-            elseif (object.ClassName == "Part") then
-                cframe = object.CFrame
-            end
-            
-            if cframe then
-                table.insert(framesArray, cframe)
-            end
-        end
-        
-        Step:Fire(timePassed)
+-- Navbar Title
+local TitleLabel = Instance.new("TextLabel")
+TitleLabel.Size = UDim2.new(1,-60,1,0)
+TitleLabel.Position = UDim2.new(0,15,0,0)
+TitleLabel.BackgroundTransparency = 1
+TitleLabel.Text = "JI SON YING"
+TitleLabel.Font = Enum.Font.GothamBlack
+TitleLabel.TextSize = 18
+TitleLabel.TextColor3 = Color3.fromRGB(255,255,255)
+TitleLabel.TextXAlignment = Enum.TextXAlignment.Left
+TitleLabel.Parent = Navbar
+
+-- X Button
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Size = UDim2.new(0,35,0,35)
+CloseBtn.Position = UDim2.new(1,-45,0.5,-17)
+CloseBtn.BackgroundColor3 = Color3.fromRGB(20,20,20)
+CloseBtn.Text = "X"
+CloseBtn.Font = Enum.Font.GothamBold
+CloseBtn.TextSize = 20
+CloseBtn.TextColor3 = Color3.fromRGB(255,255,255)
+CloseBtn.Parent = Navbar
+Instance.new("UICorner",CloseBtn).CornerRadius = UDim.new(1,0)
+
+-- ScrollFrame
+local ScrollFrame = Instance.new("ScrollingFrame")
+ScrollFrame.Size = UDim2.new(1,0,1,-65)
+ScrollFrame.Position = UDim2.new(0,0,0,55)
+ScrollFrame.BackgroundTransparency = 1
+ScrollFrame.ScrollBarThickness = 8
+ScrollFrame.ScrollBarImageTransparency = 1
+ScrollFrame.ScrollingDirection = Enum.ScrollingDirection.Y
+ScrollFrame.CanvasSize = UDim2.new(0,0,0,0)
+ScrollFrame.Parent = MainFrame
+
+local UIListLayout = Instance.new("UIListLayout")
+UIListLayout.Parent = ScrollFrame
+UIListLayout.Padding = UDim.new(0,6)
+UIListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    ScrollFrame.CanvasSize = UDim2.new(0,0,0,UIListLayout.AbsoluteContentSize.Y + 10)
+end)
+
+-- Floating Mini GUI (JSY)
+local MiniFrame = Instance.new("TextButton")
+MiniFrame.Size = UDim2.new(0,60,0,30)
+MiniFrame.Position = UDim2.new(1,-80,0,10) -- pojok kanan atas
+MiniFrame.BackgroundColor3 = Color3.fromRGB(30,0,60)
+MiniFrame.Text = "JSY"
+MiniFrame.Font = Enum.Font.GothamBlack
+MiniFrame.TextSize = 18
+MiniFrame.TextColor3 = Color3.fromRGB(255,255,255)
+MiniFrame.TextStrokeTransparency = 0.3
+MiniFrame.TextStrokeColor3 = Color3.fromRGB(150,0,200)
+MiniFrame.Visible = false
+MiniFrame.Active = true
+MiniFrame.Draggable = true
+MiniFrame.Parent = ScreenGui
+local miniCorner = Instance.new("UICorner")
+miniCorner.CornerRadius = UDim.new(0,10)
+miniCorner.Parent = MiniFrame
+
+-- Gradient tulisan JSY
+local gradient = Instance.new("UIGradient")
+gradient.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(255,255,255)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,255))
+}
+gradient.Rotation = 90
+gradient.Parent = MiniFrame
+
+-- Logika close & reopen
+CloseBtn.MouseButton1Click:Connect(function()
+    MainFrame.Visible = false
+    MiniFrame.Visible = true
+end)
+
+MiniFrame.MouseButton1Click:Connect(function()
+    MainFrame.Visible = true
+    MiniFrame.Visible = false
+end)
+
+---------------------------------------------------
+-- Semua tombol dan fitur masih sama kayak sebelumnya
+---------------------------------------------------
+
+-- Fungsi bikin tombol
+local function createButton(icon,text,url)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, 160, 0, 32)
+    btn.BackgroundColor3 = Color3.fromRGB(10,10,10)
+    btn.Text = icon.."  "..text
+    btn.TextSize = 14
+    btn.Font = Enum.Font.GothamBlack
+    btn.TextColor3 = Color3.fromRGB(255,255,255)
+    btn.TextXAlignment = Enum.TextXAlignment.Center
+    Instance.new("UICorner",btn).CornerRadius = UDim.new(0,10)
+
+    btn.MouseEnter:Connect(function()
+        TweenService:Create(btn,TweenInfo.new(0.2),{BackgroundColor3=Color3.fromRGB(50,0,130)}):Play()
     end)
+    btn.MouseLeave:Connect(function()
+        TweenService:Create(btn,TweenInfo.new(0.2),{BackgroundColor3=Color3.fromRGB(10,10,10)}):Play()
+    end)
+
+    btn.MouseButton1Click:Connect(function()
+        if url ~= "" then
+            local success, response = pcall(function()
+                return game:HttpGet(url)
+            end)
+            if success and response then
+                local func, err = loadstring(response)
+                if func then func() else warn("Loadstring error: "..tostring(err)) end
+            else warn("HttpGet failed for "..tostring(url)) end
+        end
+    end)
+
+    btn.Parent = ScrollFrame
 end
 
-Module.Stop = function()
-    if not isRecording then
-        return
-    end
-    
-    isRecording = false
-    recordConnection:Disconnect()
-    recordConnection = nil
-    
-    ReplayCache[activeRecordingName] = ActiveRecording
-    
-    OnStop:Fire(activeRecordingName)
-    
-    ActiveRecording = {}
-    activeRecordingName = ""
-    timePassed = 0
+-- Tombol Script
+createButton("","spectator","https://pastefy.app/uzM8fN4Q/raw")
+createButton("","fly & rayap besi","https://pastefy.app/bIjtwpOB/raw")
+createButton("","double jump","https://raw.githubusercontent.com/Biontoken/Map-gunung/refs/heads/main/doublejump.txt")
+createButton("","jalan udara","https://raw.githubusercontent.com/Biontoken/Map-gunung/refs/heads/main/Airwalk.txt")
+createButton("","REC","https://raw.githubusercontent.com/Biontoken/Map-gunung/refs/heads/main/rec.txt")
+
+-- ðŸ’¡ Lampu Kepala Putih
+local Player = game.Players.LocalPlayer
+
+-- Tombol Lampu Kepala
+local LampBtn = Instance.new("TextButton")
+LampBtn.Size = UDim2.new(0,160,0,32)
+LampBtn.BackgroundColor3 = Color3.fromRGB(10,10,10)
+LampBtn.Text = "Lampu"
+LampBtn.Font = Enum.Font.GothamBlack
+LampBtn.TextSize = 14
+LampBtn.TextColor3 = Color3.fromRGB(255,255,255)
+Instance.new("UICorner", LampBtn).CornerRadius = UDim.new(0,10)
+LampBtn.Parent = ScrollFrame
+
+local lampOn = false
+local headLamp = nil
+
+-- Buat lampu kepala
+local function addHeadLamp(char)
+    local head = char:FindFirstChild("Head")
+    if not head then return end
+    if char:FindFirstChild("HeadLamp") then return end
+
+    headLamp = Instance.new("Part")
+    headLamp.Name = "HeadLamp"
+    headLamp.Size = Vector3.new(0.5,0.5,0.5)
+    headLamp.Shape = Enum.PartType.Ball
+    headLamp.Color = Color3.fromRGB(255,255,255) -- putih
+    headLamp.Material = Enum.Material.Neon
+    headLamp.Anchored = false
+    headLamp.CanCollide = false
+    headLamp.CFrame = head.CFrame * CFrame.new(0,0.8,0) -- di atas kepala
+    headLamp.Parent = char
+
+    local weld = Instance.new("WeldConstraint")
+    weld.Part0 = head
+    weld.Part1 = headLamp
+    weld.Parent = headLamp
+
+    local light = Instance.new("PointLight")
+    light.Color = Color3.fromRGB(255,255,255)
+    light.Range = 100
+    light.Brightness = 2
+    light.Parent = headLamp
 end
 
-Module.Replay = function(name)
-    if isReplaying then
-        return
+-- Hapus lampu kepala
+local function removeHeadLamp()
+    if headLamp and headLamp.Parent then
+        headLamp:Destroy()
     end
-    
-    local replayData = ReplayCache[name]
-    assert(replayData, "Could not find a replay with name: " .. name)
-    
-    isReplaying = true
-    OnReplay:Fire(name)
-    
-    local replayFolder = Workspace:FindFirstChild("ThePhantomReplay")
-    if replayFolder then
-        replayFolder:ClearAllChildren()
+    headLamp = nil
+end
+
+-- Toggle Lampu
+LampBtn.MouseButton1Click:Connect(function()
+    lampOn = not lampOn
+    local char = Player.Character or Player.CharacterAdded:Wait()
+    if lampOn then
+        addHeadLamp(char)
+        LampBtn.BackgroundColor3 = Color3.fromRGB(150,0,200)
     else
-        replayFolder = Instance.new("Folder", Workspace)
-        replayFolder.Name = "ThePhantomReplay"
+        removeHeadLamp()
+        LampBtn.BackgroundColor3 = Color3.fromRGB(10,10,10)
     end
-    
-    local activeThreads = 0
-    local totalFrames = 0
-    
-    for object, framesArray in pairs(replayData) do
-        local phantom = ReplicatedStorage:FindFirstChild(object.Name)
-        if not phantom then
-            continue
-        end
-        
-        activeThreads += 1
-        if #framesArray > totalFrames then
-            totalFrames = #framesArray
-        end
-        
-        task.spawn(function()
-            local playbackPhantom = phantom:Clone()
-            playbackPhantom.Parent = replayFolder
-            
-            for frameIndex, cframe in ipairs(framesArray) do
-                
-                if (playbackPhantom.ClassName == "Model") then
-                    if playbackPhantom.PrimaryPart then
-                        playbackPhantom.PrimaryPart.CFrame = cframe
-                    end
-                else
-                    playbackPhantom.CFrame = cframe
-                end
-                
-                FrameStep:Fire(frameIndex)
-                RunService.Heartbeat:Wait()
-            end
-            
-            playbackPhantom:Destroy()
-            activeThreads -= 1
-        end)
-    end
-    
-    task.spawn(function()
-        while activeThreads > 0 do
-            RunService.Heartbeat:Wait()
-        end
-        
-        isReplaying = false
-        OnReplayStop:Fire(name)
-    end)
-    
-end
+end)
 
-Module.Events = {
-    STEP = Step,
-    ON_RECORD = OnRecord,
-    ON_STOP = OnStop,
-    ON_REPLAY = OnReplay,
-    ON_REPLAY_STOP = OnReplayStop,
-    FRAME_STEP = FrameStep
+-- Kalau respawn, otomatis pasang lagi kalau tombol masih ON
+Player.CharacterAdded:Connect(function(char)
+    if lampOn then
+        task.wait(1) -- tunggu body spawn biar Head sudah ada
+        addHeadLamp(char)
+    end
+end)
+
+
+local Player = game.Players.LocalPlayer
+
+-- GUI utama (tombol untuk memunculkan / menghapus item speed)
+local MainBtn = Instance.new("TextButton")
+MainBtn.Size = UDim2.new(0,160,0,32)
+MainBtn.BackgroundColor3 = Color3.fromRGB(10,10,10)
+MainBtn.Text = "Speed"
+MainBtn.Font = Enum.Font.GothamBlack
+MainBtn.TextSize = 14
+MainBtn.TextColor3 = Color3.fromRGB(255,255,255)
+Instance.new("UICorner", MainBtn).CornerRadius = UDim.new(0,10)
+MainBtn.Parent = ScrollFrame
+
+-- Variabel item speed
+local SpeedGui = nil
+local SpeedBtn = nil
+local speedOn = false
+local selendangPart = nil
+local trail = nil
+
+-- Warna pelangi
+local colors = {
+    Color3.fromRGB(255,0,0),
+    Color3.fromRGB(255,127,0),
+    Color3.fromRGB(255,255,0),
+    Color3.fromRGB(0,255,0),
+    Color3.fromRGB(0,0,255),
+    Color3.fromRGB(75,0,130),
+    Color3.fromRGB(148,0,211)
 }
 
-local ReplayModule = Module 
-
-local Player = game:GetService("Players").LocalPlayer
-local Character = Player.Character or Player.CharacterAdded:Wait()
-
-if not Character then
-    return
+local function lerpColor(c1, c2, t)
+    return Color3.new(
+        c1.R + (c2.R - c1.R) * t,
+        c1.G + (c2.G - c1.G) * t,
+        c1.B + (c2.B - c1.B) * t
+    )
 end
 
-local RootPart = Character:WaitForChild("HumanoidRootPart")
-if not Character.PrimaryPart then
-    Character.PrimaryPart = RootPart
+-- Buat selendang
+local function addSelendang(char)
+    -- kalau ada selendang lama, hapus dulu
+    if selendangPart then
+        selendangPart:Destroy()
+        selendangPart = nil
+        trail = nil
+    end
+
+    local torso = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("UpperTorso")
+    if not torso then return end
+
+    selendangPart = Instance.new("Part")
+    selendangPart.Name = "SelendangPart"
+    selendangPart.Size = Vector3.new(0.5,0.5,0.5)
+    selendangPart.Transparency = 1
+    selendangPart.Anchored = false
+    selendangPart.CanCollide = false
+    selendangPart.CFrame = torso.CFrame
+    selendangPart.Parent = char
+
+    local weld = Instance.new("WeldConstraint")
+    weld.Part0 = torso
+    weld.Part1 = selendangPart
+    weld.Parent = selendangPart
+
+    -- Attachment kiri-kanan
+    local attLeft = Instance.new("Attachment", selendangPart)
+    attLeft.Position = Vector3.new(-1,1.6,0)
+    local attRight = Instance.new("Attachment", selendangPart)
+    attRight.Position = Vector3.new(1,1.6,0)
+
+    trail = Instance.new("Trail")
+    trail.Attachment0 = attLeft
+    trail.Attachment1 = attRight
+    trail.Parent = selendangPart
+    trail.Lifetime = 0.6
+    trail.MinLength = 0.1
+    trail.LightEmission = 1
+    trail.Transparency = NumberSequence.new(0,1)
+    trail.WidthScale = NumberSequence.new(0.5,0)
+
+    -- Animasi pelangi
+    task.spawn(function()
+        local step = 0
+        while speedOn and trail and trail.Parent do
+            local idx1 = math.floor(step) % #colors + 1
+            local idx2 = (idx1 % #colors) + 1
+            local t = step % 1
+            local col = lerpColor(colors[idx1], colors[idx2], t)
+            trail.Color = ColorSequence.new(col)
+            step = step + 0.02
+            task.wait(0.03)
+        end
+    end)
 end
 
-ReplayModule.Register(Character)
+-- Hapus selendang
+local function removeSelendang()
+    if selendangPart then
+        selendangPart:Destroy()
+        selendangPart = nil
+        trail = nil
+    end
+end
 
-task.wait(3)
-ReplayModule.Record("MyReplay")
+-- Buat tombol Speed
+local function createSpeedItem()
+    if SpeedBtn then return end -- biar nggak double
 
-task.wait(10)
+    SpeedGui = Instance.new("ScreenGui", Player:WaitForChild("PlayerGui"))
+    SpeedGui.Name = "SpeedSelendangGui"
+    SpeedGui.ResetOnSpawn = false
+    
 
-ReplayModule.Stop()
+    SpeedBtn = Instance.new("TextButton")
+    SpeedBtn.Size = UDim2.new(0,120,0,40)
+    SpeedBtn.Position = UDim2.new(0.5,130,1,-100) -- kanan tombol Sign
+    SpeedBtn.BackgroundColor3 = Color3.fromRGB(10,10,10)
+    SpeedBtn.Text = "Speed"
+    SpeedBtn.Font = Enum.Font.GothamBlack
+    SpeedBtn.TextSize = 14
+    SpeedBtn.TextColor3 = Color3.fromRGB(255,255,255)
+    Instance.new("UICorner", SpeedBtn).CornerRadius = UDim.new(0,10)
+    SpeedBtn.Parent = SpeedGui
 
-task.wait(3)
+    SpeedBtn.MouseButton1Click:Connect(function()
+        speedOn = not speedOn
+        local char = Player.Character or Player.CharacterAdded:Wait()
+        local hum = char:FindFirstChild("Humanoid")
+        if speedOn then
+            if hum then hum.WalkSpeed = 48 end
+            addSelendang(char)
+            SpeedBtn.BackgroundColor3 = Color3.fromRGB(150,0,200)
+        else
+            if hum then hum.WalkSpeed = 16 end
+            removeSelendang()
+            SpeedBtn.BackgroundColor3 = Color3.fromRGB(10,10,10)
+        end
+    end)
 
-ReplayModule.Replay("MyReplay")
+    -- Supaya jalan saat respawn
+    Player.CharacterAdded:Connect(function(char)
+        local hum = char:WaitForChild("Humanoid")
+        task.wait(0.2) -- biar character siap
+        if speedOn then
+            hum.WalkSpeed = 48
+            addSelendang(char) -- bikin ulang selendang saat respawn
+            if SpeedBtn then
+                SpeedBtn.BackgroundColor3 = Color3.fromRGB(150,0,200)
+            end
+        else
+            hum.WalkSpeed = 16
+            if SpeedBtn then
+                SpeedBtn.BackgroundColor3 = Color3.fromRGB(10,10,10)
+            end
+        end
+    end)
+end
+
+-- Hapus tombol Speed
+local function destroySpeedItem()
+    speedOn = false
+    removeSelendang()
+
+    -- Reset speed ke default
+    local char = Player.Character
+    if char then
+        local hum = char:FindFirstChild("Humanoid")
+        if hum then
+            hum.WalkSpeed = 16
+        end
+    end
+
+    if SpeedGui then
+        SpeedGui:Destroy()
+        SpeedGui = nil
+        SpeedBtn = nil
+    end
+end
+
+-- Tekan tombol utama untuk toggle item Speed
+local itemVisible = false
+MainBtn.MouseButton1Click:Connect(function()
+    if not itemVisible then
+        createSpeedItem()
+        MainBtn.BackgroundColor3 = Color3.fromRGB(0,200,0)
+        MainBtn.Text = "Hapus Speed"
+        itemVisible = true
+    else
+        destroySpeedItem()
+        MainBtn.BackgroundColor3 = Color3.fromRGB(10,10,10)
+        MainBtn.Text = "Dapatkan Speed"
+        itemVisible = false
+    end
+end)
+
+
+-- ðŸ”¹ Fling
+local FlingBtn = Instance.new("TextButton")
+FlingBtn.Size = UDim2.new(0,160,0,32)
+FlingBtn.BackgroundColor3 = Color3.fromRGB(10,10,10)
+FlingBtn.Text = "TENDANG OFF"
+FlingBtn.Font = Enum.Font.GothamBlack
+FlingBtn.TextSize = 14
+FlingBtn.TextColor3 = Color3.fromRGB(255,255,255)
+Instance.new("UICorner", FlingBtn).CornerRadius = UDim.new(0,10)
+FlingBtn.Parent = ScrollFrame
+
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local hiddenfling = false
+local flingThread
+
+local function fling()
+    local lp = Players.LocalPlayer
+    while hiddenfling do
+        RunService.Heartbeat:Wait()
+        local hrp = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            local vel = hrp.Velocity
+            hrp.Velocity = vel * 99999 + Vector3.new(0, 99999, 0)
+            RunService.RenderStepped:Wait()
+            hrp.Velocity = vel
+        end
+    end
+end
+
+FlingBtn.MouseButton1Click:Connect(function()
+    hiddenfling = not hiddenfling
+    if hiddenfling then
+        FlingBtn.Text = "TENDANG ON"
+        FlingBtn.BackgroundColor3 = Color3.fromRGB(150,0,200)
+        flingThread = coroutine.create(fling)
+        coroutine.resume(flingThread)
+    else
+        FlingBtn.Text = "TENDANG OFF"
+        FlingBtn.BackgroundColor3 = Color3.fromRGB(10,10,10)
+    end
+end)
+
+-- ðŸ”¹ Selector
+local scripts = {
+    {title = " MT DAUN", url = "https://raw.githubusercontent.com/Biontoken/Map-gunung/refs/heads/main/daun.txt"},
+    {title = " MT SIBUATAN", url = "https://raw.githubusercontent.com/Biontoken/Map-gunung/refs/heads/main/%20sibuatan.txt"},
+    {title = " MT ATIN", url = "https://raw.githubusercontent.com/Biontoken/Map-gunung/refs/heads/main/atin.txt"},
+    {title = " MT ARUNIKA", url = "https://raw.githubusercontent.com/Biontoken/Map-gunung/refs/heads/main/arunika.txt"},
+    {title = " MT LEMBAYANA", url = "https://raw.githubusercontent.com/Biontoken/Map-gunung/refs/heads/main/lembayana.txt"},
+}
+local currentIndex = 1
+
+local SelectorFrame = Instance.new("Frame")
+SelectorFrame.Size = UDim2.new(0,200,0,36)
+SelectorFrame.BackgroundTransparency = 1
+SelectorFrame.Parent = ScrollFrame
+
+local RowLayout = Instance.new("UIListLayout")
+RowLayout.FillDirection = Enum.FillDirection.Horizontal
+RowLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+RowLayout.Padding = UDim.new(0,6)
+RowLayout.Parent = SelectorFrame
+
+local PrevBtn = Instance.new("TextButton")
+PrevBtn.Size = UDim2.new(0,40,1,0)
+PrevBtn.Text = "<"
+PrevBtn.Font = Enum.Font.GothamBlack
+PrevBtn.TextSize = 20
+PrevBtn.BackgroundColor3 = Color3.fromRGB(150,0,200)
+PrevBtn.TextColor3 = Color3.new(1,1,1)
+Instance.new("UICorner",PrevBtn).CornerRadius = UDim.new(0,8)
+PrevBtn.Parent = SelectorFrame
+
+local TitleBtn = Instance.new("TextButton")
+TitleBtn.Size = UDim2.new(0,100,1,0)
+TitleBtn.BackgroundColor3 = Color3.fromRGB(0,0,0)
+TitleBtn.Font = Enum.Font.GothamBlack
+TitleBtn.TextSize = 14
+TitleBtn.TextColor3 = Color3.fromRGB(255,255,255)
+TitleBtn.Text = " "..scripts[currentIndex].title.." "
+Instance.new("UICorner",TitleBtn).CornerRadius = UDim.new(0,10)
+TitleBtn.Parent = SelectorFrame
+
+local NextBtn = Instance.new("TextButton")
+NextBtn.Size = UDim2.new(0,40,1,0)
+NextBtn.Text = ">"
+NextBtn.Font = Enum.Font.GothamBlack
+NextBtn.TextSize = 20
+NextBtn.BackgroundColor3 = Color3.fromRGB(150,0,200)
+NextBtn.TextColor3 = Color3.new(1,1,1)
+Instance.new("UICorner",NextBtn).CornerRadius = UDim.new(0,8)
+NextBtn.Parent = SelectorFrame
+
+local function updateTitle()
+    TitleBtn.TextTransparency = 1
+    TitleBtn.Text = " "..scripts[currentIndex].title.." "
+    TweenService:Create(TitleBtn,TweenInfo.new(0.2),{TextTransparency = 0}):Play()
+end
+
+PrevBtn.MouseButton1Click:Connect(function()
+    currentIndex = (currentIndex - 2) % #scripts + 1
+    updateTitle()
+end)
+NextBtn.MouseButton1Click:Connect(function()
+    currentIndex = currentIndex % #scripts + 1
+    updateTitle()
+end)
+
+TitleBtn.MouseButton1Click:Connect(function()
+    local selected = scripts[currentIndex]
+    local success, response = pcall(function()
+        return game:HttpGet(selected.url)
+    end)
+    if success and response then
+        local func, err = loadstring(response)
+        if func then func() else warn("Loadstring error: "..tostring(err)) end
+    end
+end)
